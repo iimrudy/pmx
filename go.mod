@@ -1,4 +1,4 @@
-module github.com/wcamarao/pmx
+module github.com/iimrudy/pmx
 
 go 1.21
 

@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/iimrudy/pmx"
+	"github.com/iimrudy/pmx/test"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/suite"
-	"github.com/wcamarao/pmx"
-	"github.com/wcamarao/pmx/test"
 )
 
 type SelectSliceSuite struct {

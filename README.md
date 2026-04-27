@@ -5,7 +5,7 @@ Golang data mapping library for postgres and pgx.
 ## Install
 
 ```
-go get -u github.com/wcamarao/pmx
+go get -u github.com/iimrudy/pmx
 ```
 
 ## Features
