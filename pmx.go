@@ -42,7 +42,7 @@ func Insert(ctx context.Context, e Executor, entity any) (pgconn.CommandTag, err
 		return pgconn.CommandTag{}, ErrInvalidRef
 	}
 
-	tableTag, ok := t.Field(0).Tag.Lookup("table")
+	tableTag, ok := findTableTag(t)
 	if !ok {
 		return pgconn.CommandTag{}, ErrNoTableTag
 	}
@@ -56,26 +56,24 @@ func Insert(ctx context.Context, e Executor, entity any) (pgconn.CommandTag, err
 	values := []string{}
 	args := []any{}
 
-	for i := 0; i < t.NumField(); i++ {
-		tag := t.Field(i).Tag
-		column := tag.Get("db")
+	walkFields(t, v, func(sf reflect.StructField, fv reflect.Value) {
+		column := sf.Tag.Get("db")
 		if len(column) == 0 {
-			continue
+			return
 		}
-		if !v.Field(i).CanInterface() {
-			continue
+		if !fv.CanInterface() {
+			return
 		}
 		columns = append(columns, column)
-		if tag.Get("default") == "true" {
+		if sf.Tag.Get("default") == "true" {
 			values = append(values, "default")
-			continue
+			return
 		}
 
-		fv := v.Field(i)
 		if fv.Kind() == reflect.Ptr && fv.IsNil() {
 			args = append(args, nil)
 			values = append(values, fmt.Sprintf("$%d", len(args)))
-			continue
+			return
 		}
 
 		switch {
@@ -84,7 +82,7 @@ func Insert(ctx context.Context, e Executor, entity any) (pgconn.CommandTag, err
 			if u == uuid.Nil {
 				args = append(args, nil)
 				values = append(values, fmt.Sprintf("$%d", len(args)))
-				continue
+				return
 			}
 		case fv.Kind() == reflect.Ptr &&
 			(fv.Type().Elem() == uuidT || fv.Type().Elem().ConvertibleTo(uuidT)) && fv.Elem().CanConvert(uuidT):
@@ -92,13 +90,13 @@ func Insert(ctx context.Context, e Executor, entity any) (pgconn.CommandTag, err
 			if u == uuid.Nil {
 				args = append(args, nil)
 				values = append(values, fmt.Sprintf("$%d", len(args)))
-				continue
+				return
 			}
 		}
 
 		args = append(args, fv.Interface())
 		values = append(values, fmt.Sprintf("$%d", len(args)))
-	}
+	})
 
 	buf.WriteString(fmt.Sprintf(
 		"(%s) values (%s)",
@@ -236,13 +234,13 @@ func findFieldByDBTag(t reflect.Type, v reflect.Value, name string) any {
 		fv := v.Field(i)
 
 		tag := sf.Tag.Get("db")
-		tagName, inline := parseDBTag(tag)
+		tagName, _ := parseDBTag(tag)
 
 		if tagName == name {
 			return fv.Addr().Interface()
 		}
 
-		if inline && sf.Anonymous && sf.Type.Kind() == reflect.Struct {
+		if sf.Anonymous && sf.Type.Kind() == reflect.Struct {
 			if field := findFieldByDBTag(sf.Type, fv, name); field != nil {
 				return field
 			}
@@ -268,4 +266,31 @@ func parseDBTag(tag string) (name string, inline bool) {
 	}
 
 	return name, inline
+}
+
+func walkFields(t reflect.Type, v reflect.Value, fn func(reflect.StructField, reflect.Value)) {
+	for i := 0; i < t.NumField(); i++ {
+		sf := t.Field(i)
+		fv := v.Field(i)
+		if sf.Anonymous && sf.Type.Kind() == reflect.Struct {
+			walkFields(sf.Type, fv, fn)
+			continue
+		}
+		fn(sf, fv)
+	}
+}
+
+func findTableTag(t reflect.Type) (string, bool) {
+	for i := 0; i < t.NumField(); i++ {
+		sf := t.Field(i)
+		if sf.Anonymous && sf.Type.Kind() == reflect.Struct {
+			if tag, ok := findTableTag(sf.Type); ok {
+				return tag, true
+			}
+		}
+		if tag, ok := sf.Tag.Lookup("table"); ok {
+			return tag, true
+		}
+	}
+	return "", false
 }

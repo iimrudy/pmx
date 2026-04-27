@@ -20,6 +20,15 @@ var statements = []string{
 		metadata jsonb,
 		slice jsonb
 	)`,
+
+	`create table enriched_events (
+		position bigint default 42,
+		recorded_at timestamp default make_timestamp(2024, 1, 1, 0, 0, 0),
+		recorded_by text,
+		liked boolean,
+		likes bigint,
+		views bigint
+	)`,
 }
 
 type Event struct {
@@ -35,6 +44,19 @@ type Projection struct {
 	Slice             []string       `db:"slice"`
 	ExportedTransient string
 	privateTransient  string
+}
+
+type EventCore struct {
+	Position   int64     `db:"position"    default:"true" table:"enriched_events"`
+	RecordedAt time.Time `db:"recorded_at" default:"true"`
+	RecordedBy string    `db:"recorded_by"`
+}
+
+type EnrichedEvent struct {
+	EventCore
+	Liked *bool  `db:"liked"`
+	Likes uint64 `db:"likes"`
+	Views uint64 `db:"views"`
 }
 
 func init() {

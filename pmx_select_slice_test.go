@@ -89,3 +89,17 @@ func (s *SelectSliceSuite) TestSlicePointerOfMapValue() {
 	err := pmx.Select(context.Background(), s.conn, &projections, "select 1")
 	s.ErrorIs(err, pmx.ErrInvalidRef)
 }
+
+func (s *SelectSliceSuite) TestEmbeddedStructSlice() {
+	var events []*test.EnrichedEvent
+	err := pmx.Select(context.Background(), s.conn, &events,
+		"select $1::bigint as position, $2::text as recorded_by, $3::bigint as likes, $4::bigint as views",
+		int64(1), "user-1", uint64(10), uint64(100),
+	)
+	s.NoError(err)
+	s.Len(events, 1)
+	s.Equal(int64(1), events[0].Position)
+	s.Equal("user-1", events[0].RecordedBy)
+	s.Equal(uint64(10), events[0].Likes)
+	s.Equal(uint64(100), events[0].Views)
+}

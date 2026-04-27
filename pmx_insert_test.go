@@ -103,3 +103,51 @@ func (s *InsertSuite) TestMapValue() {
 	s.Zero(tag)
 	s.ErrorIs(err, pmx.ErrInvalidRef)
 }
+
+func (s *InsertSuite) TestEmbeddedStructWithDefaults() {
+	liked := true
+	event := test.EnrichedEvent{
+		EventCore: test.EventCore{
+			RecordedBy: "enriched-user",
+		},
+		Liked: &liked,
+		Likes: 10,
+		Views: 100,
+	}
+	tag, err := pmx.Insert(context.Background(), s.conn, &event)
+	s.Equal(pgconn.NewCommandTag("INSERT 0 1"), tag)
+	s.NoError(err)
+
+	s.EqualValues(42, event.Position)
+	s.Equal(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), event.RecordedAt)
+	s.Equal("enriched-user", event.RecordedBy)
+	s.Equal(&liked, event.Liked)
+	s.Equal(uint64(10), event.Likes)
+	s.Equal(uint64(100), event.Views)
+}
+
+func (s *InsertSuite) TestEmbeddedStructWithNilPtr() {
+	event := test.EnrichedEvent{
+		EventCore: test.EventCore{
+			RecordedBy: "enriched-user-nil",
+		},
+		Liked: nil,
+		Likes: 5,
+		Views: 50,
+	}
+	tag, err := pmx.Insert(context.Background(), s.conn, &event)
+	s.Equal(pgconn.NewCommandTag("INSERT 0 1"), tag)
+	s.NoError(err)
+
+	var recordedBy string
+	var likes, views uint64
+	var liked *bool
+	row := s.conn.QueryRow(context.Background(),
+		"select recorded_by, liked, likes, views from enriched_events where recorded_by = $1", "enriched-user-nil")
+	err = row.Scan(&recordedBy, &liked, &likes, &views)
+	s.NoError(err)
+	s.Equal("enriched-user-nil", recordedBy)
+	s.Nil(liked)
+	s.Equal(uint64(5), likes)
+	s.Equal(uint64(50), views)
+}

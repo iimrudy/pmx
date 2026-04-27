@@ -82,3 +82,41 @@ func (s *SelectStructSuite) TestMapValue() {
 	err := pmx.Select(context.Background(), s.conn, projection, "select 1")
 	s.ErrorIs(err, pmx.ErrInvalidRef)
 }
+
+func (s *SelectStructSuite) TestEmbeddedStruct() {
+	liked := true
+	var event test.EnrichedEvent
+	err := pmx.Select(context.Background(), s.conn, &event,
+		"select $1::bigint as position, $2::text as recorded_by, $3::boolean as liked, $4::bigint as likes, $5::bigint as views",
+		int64(1), "user-1", true, uint64(10), uint64(100),
+	)
+	s.NoError(err)
+	s.Equal(int64(1), event.Position)
+	s.Equal("user-1", event.RecordedBy)
+	s.Equal(&liked, event.Liked)
+	s.Equal(uint64(10), event.Likes)
+	s.Equal(uint64(100), event.Views)
+}
+
+func (s *SelectStructSuite) TestEmbeddedStructNull() {
+	var event test.EnrichedEvent
+	err := pmx.Select(context.Background(), s.conn, &event,
+		"select $1::bigint as position, $2::text as recorded_by",
+		int64(5), nil,
+	)
+	s.NoError(err)
+	s.Equal(int64(5), event.Position)
+	s.Nil(event.Liked)
+	s.Equal(uint64(0), event.Likes)
+}
+
+func (s *SelectStructSuite) TestEmbeddedStructUnmapped() {
+	var event test.EnrichedEvent
+	err := pmx.Select(context.Background(), s.conn, &event,
+		"select $1::bigint as position, $2::text as unmapped",
+		int64(1), "x",
+	)
+	s.NoError(err)
+	s.Equal(int64(1), event.Position)
+	s.Equal("", event.RecordedBy)
+}
